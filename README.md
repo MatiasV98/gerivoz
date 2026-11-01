@@ -20,6 +20,10 @@ Paraná). Presentado en el **6° Congreso Virtual "Los Microcontroladores y sus 
 > compression) reached 30 m with high packet loss; this repository contains the later ADPCM
 > streaming version. Team project, UTN Paraná, 2026.
 
+<p align="center">
+  <img src="docs/gabinete.jpg" alt="Dos handies GeriVoz en sus gabinetes impresos en 3D" width="320">
+</p>
+
 ## Equipo
 
 Lucas Adriel Cusit, Tomás Polinelli, Alan Monzón Cáceres, Matias Vicentin, Emiliano Rossi y
@@ -29,6 +33,8 @@ Mario Di Paola (autores del trabajo presentado en el congreso).
 gran parte del firmware.
 
 La página web de la central es de Alan Monzón Cáceres.
+
+El gabinete impreso en 3D está en [`cad/GERIVOZ_CASE.f3d`](cad/GERIVOZ_CASE.f3d) (Autodesk Fusion).
 
 Este es el repositorio de presentación del proyecto, con el estado final del código. El desarrollo
 se hizo en un repositorio de trabajo compartido por el equipo.
@@ -45,6 +51,10 @@ parlante <--I2S 16 kHz-- FIR interpolador <--8 kHz-- ADPCM <-- jitter buffer
 Cada nodo: ESP32 (NodeMCU-32S), CC1101 por SPI, micrófono INMP441 y amplificador MAX98357A sobre un
 único bus I2S, pulsador de voz (PTT), pulsador de mensajes, LEDs de TX/RX y buzzer. En el prototipo
 presentado, la alimentación es un pack 2S de celdas 18650 con BMS y regulador a 3,3 V.
+
+| Placa del nodo, frente y dorso | Gabinete (modelo 3D) |
+|---|---|
+| ![Placa del nodo](docs/placa_nodo.jpg) | ![Render del gabinete](docs/gabinete_render.jpg) |
 
 ### Roles
 
@@ -72,6 +82,9 @@ La base envía por USB, a 921600 baudios, el texto de cada evento y el audio ya 
 tramas binarias (sincronismo, nodo, número de secuencia, muestras y XOR de control). La página
 (`pagina/`, Web Serial en Chrome o Edge) separa texto y audio, rellena con silencio los paquetes
 perdidos y arma un WAV de 8 kHz por llamada.
+
+![Página de la central](docs/pagina_central.jpg)
+*Página de la central con eventos de prueba generados por su modo «Simular».*
 
 ## Por qué hace falta comprimir
 
@@ -174,6 +187,8 @@ src/prueba_hw.cpp    Prueba de hardware de audio independiente (entorno prueba_a
 tools/probar.py      Chequeo previo de las dos placas por puerto serie
 tools/medir_alcance.py  Registro de la prueba de alcance
 pagina/              Panel de la central (HTML + JavaScript, Web Serial)
+cad/                 Gabinete del handy (Autodesk Fusion)
+docs/                Fotos y capturas
 ```
 
 ## Conexiones
