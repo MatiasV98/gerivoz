@@ -12,6 +12,10 @@
 const NODOS = {
   1: 'Residente 1 · Handy 1',
   2: 'Residente 2 · Handy 2',
+  3: 'Residente 3 · Handy 3',
+  4: 'Residente 4 · Handy 4',
+  5: 'Residente 5 · Handy 5',
+  6: 'Residente 6 · Handy 6',
 };
 
 // ============ ESTADO ============
