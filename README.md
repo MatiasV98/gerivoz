@@ -22,8 +22,6 @@ Paraná). Presentado en el **6° Congreso Virtual "Los Microcontroladores y sus 
 Lucas Adriel Cusit, Tomás Polinelli, Alan Monzón Cáceres, Matias Vicentin, Emiliano Rossi y
 Mario Di Paola (autores del trabajo presentado en el congreso).
 
-**Mi aporte (Matias Vicentin):** idea general y planteo de la solución, diseño 3D y desarrollo de
-gran parte del firmware.
 
 Este es el repositorio de presentación del proyecto, con el estado final del código. El desarrollo
 se hizo en un repositorio de trabajo compartido por el equipo.
