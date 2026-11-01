@@ -101,6 +101,14 @@
 // arrancar con el PTT apretado). Libres y seguros: 4, 13, 16, 17, 21.
 #define BTN_ALERTA      4
 
+// ---------- Boton de MENSAJES (BTN_ALERTA): dos niveles de urgencia ----------
+//   1 toque            -> PULSO  = "Atencion general" (bip en la central)
+//   2 toques rapidos   -> ALERTA = "Emergencia"       (sirena de 2 s en la central)
+// Con 1 toque hay que esperar DOBLE_TOQUE_MS para saber que no viene el 2do,
+// por eso el aviso de atencion sale con ~0,5 s de demora. La voz va aparte,
+// por el PTT (GPIO12).
+#define DOBLE_TOQUE_MS  450      // tiempo maximo entre soltar y el 2do toque
+
 // ---------- Sonido de la alarma ----------
 // La alarma la genera el firmware del que RECIBE: por el aire viaja solo el
 // aviso de 5 bytes, nunca el audio. Por eso la alerta llega mucho mas lejos
@@ -159,14 +167,26 @@
 // ============================================================
 //  IDENTIFICACION DE NODO
 // ============================================================
-// Cada placa ignora sus propios paquetes usando este ID.
-// Lo define platformio.ini con -D NODE_ID=<n> segun el entorno:
-//    pio run -e nodo1 -t upload   -> placa A (ID 1)
-//    pio run -e nodo2 -t upload   -> placa B (ID 2)
-// El valor de abajo es solo el respaldo si se compila sin esa bandera.
+// ROL + ID. Los define platformio.ini segun el entorno:
+//    pio run -e base   -> NODE_ID 0, ES_BASE 1 : CENTRAL (enchufada a la PC)
+//    pio run -e handy1 -> NODE_ID 1, ES_BASE 0 : handy del residente 1
+//    pio run -e handy2 -> NODE_ID 2, ES_BASE 0 : handy del residente 2
+// El NODE_ID viaja en el byte 1 de cada paquete: es lo que la base usa para
+// identificar al residente (y lo que muestra la pagina).
+//
+// Diferencias de rol:
+//   BASE : acepta paquetes de cualquier handy y le manda a la PC el audio
+//          decodificado (tramas binarias, ver enviarAudioAlPC()).
+//   HANDY: solo acepta paquetes de la base (BASE_NODE_ID). Asi un handy no
+//          suena con la alerta o la voz de OTRO residente. No manda audio a la PC.
+// Los valores de abajo son solo el respaldo si se compila sin esas banderas.
 #ifndef NODE_ID
 #define NODE_ID        1
 #endif
+#ifndef ES_BASE
+#define ES_BASE        0
+#endif
+#define BASE_NODE_ID   0
 
 // Byte magico: filtra basura de otros equipos que anden en 433 MHz.
 #define MAGIC_BYTE     0xA7
