@@ -67,7 +67,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("puerto", help="COM de la placa MEDIDORA (la de la notebook)")
     ap.add_argument("--salida", default="alcance.txt", help="archivo de registro")
-    ap.add_argument("--baudios", type=int, default=115200)
+    ap.add_argument("--baudios", type=int, default=921600)
     args = ap.parse_args()
 
     # Por tramo: [recibidos, esperados, suma de RSSI, cuantos RSSI, peor LQI]

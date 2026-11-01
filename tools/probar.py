@@ -24,7 +24,7 @@ def abrir(puerto, resetear=False):
     estado (por ejemplo la potencia que se bajo con 'w')."""
     s = serial.Serial()
     s.port = puerto
-    s.baudrate = 115200
+    s.baudrate = 921600
     s.timeout = 0.05
     s.dtr = False
     s.rts = False
