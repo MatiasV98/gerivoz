@@ -1,27 +1,34 @@
 # GeriVoz — comunicador de voz por RF para residencias geriátricas
 
-Firmware de un enlace de voz half-duplex (tipo *handy*) entre nodos ESP32 con transceptores CC1101 en
-433,92 MHz. Cada nodo capta voz con un micrófono MEMS I2S, la filtra, la comprime y la transmite por
-paquetes. Pensado como alternativa inalámbrica y de bajo costo a los sistemas cableados de llamada a
-enfermería.
+Sistema de llamado inalámbrico para residencias geriátricas sobre ESP32 y transceptores CC1101 en
+433,92 MHz. Cada residente tiene un *handy* con el que pide **atención** o avisa una **emergencia** y
+habla por **voz** con una **base** central. La base se conecta a una PC y muestra en una página web
+quién llamó, con qué nivel de urgencia, y permite escuchar y descargar la voz. Pensado como
+alternativa de bajo costo a los sistemas cableados de llamada a enfermería.
 
 Proyecto integrador de **Electrónica Aplicada III** (Ingeniería Electrónica, UTN Facultad Regional
 Paraná). Presentado en el **6° Congreso Virtual "Los Microcontroladores y sus Aplicaciones"**
 (UTN FRP, 2026) con el trabajo *"GeriVoz: comunicador de voz por RF para residencias geriátricas"*.
 
-> **English summary.** Half-duplex push-to-talk voice link between ESP32 nodes using CC1101
-> transceivers at 433.92 MHz, intended as a low-cost wireless nurse-call system for elderly care
-> homes. Audio is captured over I2S at 16 kHz, decimated to 8 kHz with a 31-tap Q15 FIR filter
+> **English summary.** Low-cost wireless nurse-call system for elderly care homes: ESP32 handsets
+> with CC1101 transceivers at 433.92 MHz send two urgency levels (attention / emergency) and
+> half-duplex push-to-talk voice to a base station, which forwards events and decoded audio to a
+> Web Serial dashboard on a PC. Approved in the course evaluation with a link beyond 100 m in line
+> of sight. Audio is captured over I2S at 16 kHz, decimated to 8 kHz with a 31-tap Q15 FIR filter
 > (polyphase interpolator on receive) and compressed with 4-bit IMA ADPCM (32 kbps), so it fits the
 > ~90 kbps usable RF channel and can be streamed while recording. The published version (PCM, no
 > compression) reached 30 m with high packet loss; this repository contains the later ADPCM
-> streaming version, verified on the bench. Team project, UTN Paraná, 2026.
+> streaming version. Team project, UTN Paraná, 2026.
 
 ## Equipo
 
 Lucas Adriel Cusit, Tomás Polinelli, Alan Monzón Cáceres, Matias Vicentin, Emiliano Rossi y
 Mario Di Paola (autores del trabajo presentado en el congreso).
 
+**Mi aporte (Matias Vicentin):** idea general y planteo de la solución, diseño 3D y desarrollo de
+gran parte del firmware.
+
+La página web de la central es de Alan Monzón Cáceres.
 
 Este es el repositorio de presentación del proyecto, con el estado final del código. El desarrollo
 se hizo en un repositorio de trabajo compartido por el equipo.
@@ -36,15 +43,35 @@ parlante <--I2S 16 kHz-- FIR interpolador <--8 kHz-- ADPCM <-- jitter buffer
 ```
 
 Cada nodo: ESP32 (NodeMCU-32S), CC1101 por SPI, micrófono INMP441 y amplificador MAX98357A sobre un
-único bus I2S, pulsador de voz (PTT), pulsador de alerta, LEDs de TX/RX y buzzer. En el prototipo
+único bus I2S, pulsador de voz (PTT), pulsador de mensajes, LEDs de TX/RX y buzzer. En el prototipo
 presentado, la alimentación es un pack 2S de celdas 18650 con BMS y regulador a 3,3 V.
 
-Funciones:
+### Roles
 
-- **Voz:** mientras se mantiene el pulsador se graba, comprime y transmite; el otro nodo reproduce a
-  medida que recibe.
-- **Alerta:** un paquete de 5 bytes hace sonar una alarma de 2 s en el otro nodo. Al no transportar
-  audio, tolera un enlace mucho peor que la voz.
+El firmware es el mismo para todas las placas; el entorno de compilación define el rol y el
+identificador (`NODE_ID`), que viaja en cada paquete y permite a la base saber qué residente llamó.
+
+- **Base** (`NODE_ID` 0): acepta paquetes de todos los handies y reenvía a la PC los eventos y el audio decodificado.
+- **Handy** (`NODE_ID` 1 a 18): solo acepta paquetes de la base; ignora a los otros handies.
+
+Los paquetes de otros sistemas en la misma banda se descartan por un byte de identificación y el CRC.
+
+### Funciones
+
+| Acción en el handy | Qué recibe la base | En la página |
+|---|---|---|
+| Botón de mensajes, 1 toque | Pulso con el ID del residente; bip del buzzer | Atención general |
+| Botón de mensajes, 2 toques | Alerta; sirena de 2 s por el parlante | Emergencia |
+| PTT mantenido | Voz en tiempo real por el parlante | Llamada de voz, para escuchar o descargar en .wav |
+
+La base responde por voz con su propio PTT (half-duplex: mientras uno habla, el otro escucha).
+
+### Base → PC
+
+La base envía por USB, a 921600 baudios, el texto de cada evento y el audio ya decodificado en
+tramas binarias (sincronismo, nodo, número de secuencia, muestras y XOR de control). La página
+(`pagina/`, Web Serial en Chrome o Edge) separa texto y audio, rellena con silencio los paquetes
+perdidos y arma un WAV de 8 kHz por llamada.
 
 ## Por qué hace falta comprimir
 
@@ -95,6 +122,11 @@ q[N // 2] += 32768 - sum(q)          # suma exacta = 32768
 
 ## Resultados
 
+### Evaluación de la cátedra (14/10/2026)
+
+Sistema completo (base, handy y página) **aprobado**, con enlace a más de 100 m sin obstáculos. Se
+evaluó la identificación del residente, los dos niveles de urgencia y la llamada de voz.
+
 ### Versión presentada en el congreso (PCM, sin compresión)
 
 - Pulsos de prueba: recepción a unos 100 m en línea recta sin obstáculos y a unos 40 m con obstáculos
@@ -102,9 +134,9 @@ q[N // 2] += 32768 - sum(q)          # suma exacta = 32768
 - Voz: enlace establecido a 30 m sin obstáculos, con una pérdida de aproximadamente el 90 % de los
   paquetes y una latencia de unos 9 s entre captura y reproducción.
 
-### Versión de este repositorio (ADPCM con streaming)
+### Versión con ADPCM y streaming: mediciones en banco
 
-Mediciones en banco, con las dos placas:
+Con las dos placas sobre la mesa:
 
 | Ensayo | Resultado |
 |---|---|
@@ -121,8 +153,7 @@ Validación de los algoritmos, reimplementados en Python con aritmética entera 
 | ADPCM sobre señal tipo voz | 25,5 dB de SNR |
 
 La latencia de punta a punta estimada a partir de los buffers (jitter buffer de 39 ms y DMA de I2S
-de 32 ms) es de unos 80 ms. **Pendiente:** medirla en las placas y repetir el ensayo de alcance a
-30 m con esta versión.
+de 32 ms) es de unos 80 ms; no se midió de punta a punta.
 
 ### Hallazgo de RF: saturación a corta distancia
 
@@ -135,13 +166,14 @@ mesa la potencia se baja en caliente (comando `w`); a distancia se usan los 10 d
 
 ```
 include/Config.h     Parámetros y pinout
-src/main.cpp         Máquina de estados, radio y comandos de diagnóstico
+src/main.cpp         Máquina de estados, roles, radio, envío a la PC y comandos de diagnóstico
 src/Dsp.cpp          FIR decimador 16→8 kHz e interpolador polifase 8→16 kHz
 src/Adpcm.cpp        Códec ADPCM IMA de 4 bits
 src/Audio.cpp        I2S: captura y reproducción no bloqueantes
 src/prueba_hw.cpp    Prueba de hardware de audio independiente (entorno prueba_audio)
 tools/probar.py      Chequeo previo de las dos placas por puerto serie
 tools/medir_alcance.py  Registro de la prueba de alcance
+pagina/              Panel de la central (HTML + JavaScript, Web Serial)
 ```
 
 ## Conexiones
@@ -149,7 +181,7 @@ tools/medir_alcance.py  Registro de la prueba de alcance
 | CC1101 | ESP32 | | Audio | ESP32 | | Interfaz | ESP32 |
 |---|---|---|---|---|---|---|---|
 | SCK | GPIO18 | | BCLK | GPIO26 | | PTT (activo alto) | GPIO12 |
-| MISO | GPIO19 | | WS / LRC | GPIO25 | | Alerta (activo alto) | GPIO4 |
+| MISO | GPIO19 | | WS / LRC | GPIO25 | | Mensajes (activo alto) | GPIO4 |
 | MOSI | GPIO23 | | Datos micrófono | GPIO32 | | LED TX | GPIO27 |
 | CSN | GPIO5 | | Datos parlante | GPIO22 | | LED RX | GPIO14 |
 | GDO0 | GPIO2 | | | | | Buzzer (vía transistor) | GPIO33 |
@@ -159,14 +191,17 @@ pulsador PTT presionado.
 
 ## Compilación
 
-Proyecto de PlatformIO (framework Arduino, librería `SmartRC-CC1101-Driver-Lib`). El firmware es el
-mismo para las dos placas; el identificador de nodo lo define el entorno:
+Proyecto de PlatformIO (framework Arduino, librería `SmartRC-CC1101-Driver-Lib`). El rol y el
+identificador los define el entorno:
 
 ```bash
-pio run -e nodo1 -t upload     # placa A
-pio run -e nodo2 -t upload     # placa B
-pio device monitor             # 115200 baudios
+pio run -e base   -t upload    # central, va conectada a la PC
+pio run -e handy1 -t upload    # handy del residente 1 (handy2, ... para más residentes)
+pio device monitor             # 921600 baudios
 ```
+
+Para usar la página, cerrar el monitor serie, abrir `pagina/index.html` en Chrome o Edge y conectar
+la base a 921600 baudios. Los nombres de cada residente se configuran al principio de `pagina/app.js`.
 
 El monitor serie acepta comandos de diagnóstico de audio y RF (tono local y por RF, medidor de nivel
 del micrófono, volcado de registros del CC1101, medidor de RSSI, estadísticas de enlace, entre otros);
