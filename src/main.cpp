@@ -112,6 +112,8 @@ static uint32_t      pttPulsaciones = 0;   // veces que se uso el pulsador
 static bool          altLast     = LOW;
 static bool          altState    = LOW;
 static unsigned long altLastTime = 0;
+static uint8_t       altToques   = 0;   // toques del boton de mensajes
+static unsigned long altSoltoMs  = 0;   // cuando se solto el ultimo toque
 static uint32_t      alertasEnviadas  = 0;
 static uint32_t      alertasRecibidas = 0;
 
@@ -128,6 +130,7 @@ static uint32_t rxLenMala   = 0;   // largo invalido
 static uint32_t rxCrcMal    = 0;   // CRC malo
 static uint32_t rxMagicMal  = 0;   // no es nuestro MAGIC_BYTE
 static uint32_t rxPropio    = 0;   // es un paquete nuestro (mismo NODE_ID)
+static uint32_t rxAjeno     = 0;   // (solo handy) viene de otro handy, no de la base
 static uint32_t rxOverflow  = 0;   // el FIFO se desbordo (no se leyo a tiempo)
 static bool     rxVerboso   = false;
 
@@ -900,6 +903,7 @@ static void mostrarStats()
     Serial.print("   CRC malo:              "); Serial.println(rxCrcMal);
     Serial.print("   MAGIC distinto:        "); Serial.println(rxMagicMal);
     Serial.print("   Paquete propio:        "); Serial.println(rxPropio);
+    Serial.print("   De otro handy (ignor): "); Serial.println(rxAjeno);
     Serial.print("   Desbordes de FIFO:     "); Serial.println(rxOverflow);
     Serial.println("--------------------");
 }
@@ -1083,7 +1087,28 @@ static void transmitirAudioStreaming(unsigned long maxMs, bool usarPulsador,
 // ============================================================
 //  AUDIO — recepcion (streaming)
 // ============================================================
-static void iniciarSesionAudio()
+// Trama de audio hacia la PC (binaria, mezclada con el texto del puerto serie).
+// La pagina de la central (aplicada_3/app.js) separa texto y audio sola:
+//   A5 5A C3 | nodo | seq (2, LE) | n (2, LE) | n muestras int16 LE | xor de todo lo posterior al sync
+// Son 16 KB/s: por eso el puerto va a 921600 (a 115200 no entra).
+static void enviarAudioAlPC(uint8_t nodo, uint16_t seq, const int16_t* m, uint16_t n)
+{
+    uint8_t f[9 + ADPCM_SAMPLES_PER_PKT * 2];
+    if (n > ADPCM_SAMPLES_PER_PKT) n = ADPCM_SAMPLES_PER_PKT;
+    f[0] = 0xA5; f[1] = 0x5A; f[2] = 0xC3;
+    f[3] = nodo;
+    f[4] = seq & 0xFF;  f[5] = (seq >> 8) & 0xFF;
+    f[6] = n & 0xFF;    f[7] = (n >> 8) & 0xFF;
+    memcpy(&f[8], m, (size_t)n * 2);          // el ESP32 es little-endian
+
+    uint8_t x = 0;
+    for (int k = 3; k < 8 + 2 * n; k++) x ^= f[k];
+    f[8 + 2 * n] = x;
+
+    Serial.write(f, 9 + 2 * n);               // una sola llamada: no se mezcla con otros prints
+}
+
+static void iniciarSesionAudio(uint8_t nodo)
 {
     ringReset();
     interp.reset();
@@ -1098,7 +1123,9 @@ static void iniciarSesionAudio()
     audioUltimoPaquete = millis();
 
     Serial.println();
-    Serial.println("[AUDIO] Sesion nueva (streaming)");
+    // La pagina saca el nodo de "nodo N" para identificar al residente.
+    Serial.print("[AUDIO] Sesion nueva (streaming) | nodo ");
+    Serial.println(nodo);
 }
 
 static void terminarSesionAudio()
@@ -1340,13 +1367,17 @@ static void monitorLocal()
 // ============================================================
 void setup()
 {
-    Serial.begin(115200);
+    // 921600 para que entre el audio hacia la PC. El buffer de TX va ANTES de
+    // begin() y evita que Serial.write() bloquee el lazo de recepcion.
+    Serial.setTxBufferSize(2048);
+    Serial.begin(921600);
     delay(1500);
     Serial.println();
     Serial.println("=========================================");
     Serial.println("  ENLACE CC1101 + VOZ (streaming ADPCM)");
     Serial.print(  "  NODO ");
-    Serial.println(NODE_ID);
+    Serial.print(NODE_ID);
+    Serial.println(ES_BASE ? "  --  BASE (central, va a la PC)" : "  --  HANDY (residente)");
     Serial.println("=========================================");
 
     pinMode(BTN_PTT,    INPUT_PULLDOWN);
@@ -1397,7 +1428,7 @@ void setup()
     Serial.println(") = hablar mientras este apretado");
     Serial.print("Pulsador ALERTA (GPIO");
     Serial.print(BTN_ALERTA);
-    Serial.println(") = hace sonar la alarma en el otro nodo");
+    Serial.println(") = mensajes: 1 toque = ATENCION | 2 toques = EMERGENCIA (sirena)");
     Serial.println("'k'=PTT manda tono de 1 kHz / 2 s en vez del microfono (probar enlace sin mic)");
     Serial.println("'a'=transmitir 3 s | 't'=pulso | 'm'=monitor local (sin RF)");
     Serial.println("'b'=baliza | 'z'=buzzer | 's'=stats | 'c'=reset");
@@ -1435,7 +1466,7 @@ void loop()
     }
     btnLast = reading;
 
-    // ---------- Segundo pulsador: alerta ----------
+    // ---------- Boton de MENSAJES: 1 toque = atencion | 2 toques = emergencia ----------
     bool leeAlt = digitalRead(BTN_ALERTA);
     if (leeAlt != altLast) {
         altLastTime = millis();
@@ -1443,12 +1474,26 @@ void loop()
     if ((millis() - altLastTime) > DEBOUNCE_MS) {
         if (leeAlt != altState) {
             altState = leeAlt;
-            if (altState == HIGH) {
-                cmd = 'L';          // flanco de subida: mandar alerta
+            if (altState == LOW) {              // se solto: un toque mas
+                altToques++;
+                altSoltoMs = millis();
+                if (altToques >= 2) {
+                    Serial.println(">> Boton mensajes: 2 toques = EMERGENCIA");
+                    cmd = 'L';
+                    altToques = 0;
+                }
             }
         }
     }
     altLast = leeAlt;
+
+    // Un solo toque y no vino el segundo a tiempo (y no esta apretado de nuevo)
+    if (altToques == 1 && altState == LOW &&
+        (millis() - altSoltoMs) > DOBLE_TOQUE_MS) {
+        Serial.println(">> Boton mensajes: 1 toque = ATENCION");
+        cmd = 't';
+        altToques = 0;
+    }
 
     // Es half-duplex: no se puede transmitir mientras se esta recibiendo.
     // La alerta ('L') queda fuera de este guard a proposito: es prioritaria.
@@ -1643,7 +1688,7 @@ void loop()
             audioRecibidos = 0; audioPerdidos = 0; audioUnderruns = 0;
             rfTimeouts = 0;
             rxFlags = 0; rxLenMala = 0; rxCrcMal = 0;
-            rxMagicMal = 0; rxPropio = 0; rxOverflow = 0;
+            rxMagicMal = 0; rxPropio = 0; rxAjeno = 0; rxOverflow = 0;
             pttPulsaciones = 0;
             alertasEnviadas = 0; alertasRecibidas = 0;
             Serial.println(">> Contadores reseteados.");
@@ -1738,6 +1783,10 @@ void loop()
         else if (buf[1] == NODE_ID) {
             rxPropio++;
         }
+        else if (!ES_BASE && buf[1] != BASE_NODE_ID) {
+            // Un handy solo le hace caso a la base, no a otros residentes.
+            rxAjeno++;
+        }
         else
         {
             uint8_t kind = buf[2];
@@ -1811,7 +1860,7 @@ void loop()
                 }
                 else if (!audioReceiving) {
                     audioSeqEsperada = 0;
-                    iniciarSesionAudio();
+                    iniciarSesionAudio(buf[1]);
                 }
             }
             else if (kind == PKT_KIND_AUDIO_DATA && len == AUDIO_PKT_LEN)
@@ -1820,7 +1869,7 @@ void loop()
                 // que llegue: mejor que quedarse mudo toda la transmision.
                 if (!audioReceiving) {
                     audioSeqEsperada = buf[3] | ((uint16_t)buf[4] << 8);
-                    iniciarSesionAudio();
+                    iniciarSesionAudio(buf[1]);
                 }
 
                 uint16_t seq = buf[3] | ((uint16_t)buf[4] << 8);
@@ -1847,6 +1896,9 @@ void loop()
                 }
 
                 ringPush(dec8, ADPCM_SAMPLES_PER_PKT);
+
+                // Copia del audio ya decodificado hacia la pagina de la central.
+                if (ES_BASE) enviarAudioAlPC(buf[1], seq, dec8, ADPCM_SAMPLES_PER_PKT);
 
                 audioRecibidos++;
                 audioUltimoPaquete = millis();
