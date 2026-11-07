@@ -22,16 +22,16 @@ const NODOS = {
 const events = [];          // todo lo recibido, el más nuevo primero
 let selectedId = null;
 let nextId = 1;
-let voice = null;           // emergencia en curso: { ev, t0 }
-let lastVoiceEvent = null;  // última emergencia cerrada (para completarle datos)
+let voice = null;           // llamada de voz en curso: { ev, t0 }
+let lastVoiceEvent = null;  // última llamada de voz cerrada (para completarle datos)
 let lastNode = null;
 let muted = false;
 
-// Audio de las emergencias: vive en la MEMORIA de esta pestaña (no se escribe a disco).
+// Audio de las llamadas de voz: vive en la MEMORIA de esta pestaña (no se escribe a disco).
 // Se pierde al recargar o cerrar la página; para conservarlo está el botón de descarga .wav.
 const RATE = 8000;                 // muestras por segundo que manda el firmware (ya decodificadas)
-const MAX_SAMPLES = RATE * 120;    // tope de 2 minutos por emergencia
-let playingId = null;              // emergencia que se está escuchando ahora
+const MAX_SAMPLES = RATE * 120;    // tope de 2 minutos por llamada
+let playingId = null;              // llamada que se está escuchando ahora
 const player = new Audio();
 player.addEventListener('ended', () => { playingId = null; render(); });
 
@@ -316,7 +316,7 @@ function handleLine(raw) {
     endEmergency(+m[1], +m[2]);
     return;
   }
-  // Las dos líneas siguientes llegan después de "Fin": completan la última emergencia.
+  // Las dos líneas siguientes llegan después de "Fin": completan la última llamada de voz.
   if ((m = line.match(/Reproducidas \d+ muestras = ([\d.]+) s de audio.*?\(([\d.]+)x/i)) && lastVoiceEvent) {
     lastVoiceEvent.dur = +m[1];
     lastVoiceEvent.ratio = +m[2];

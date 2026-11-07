@@ -4,21 +4,21 @@ Sistema de llamado inalámbrico para residencias geriátricas sobre ESP32 y tran
 433,92 MHz. Cada residente tiene un *handy* con el que pide **atención** o avisa una **emergencia** y
 habla por **voz** con una **base** central. La base se conecta a una PC y muestra en una página web
 quién llamó, con qué nivel de urgencia, y permite escuchar y descargar la voz. Pensado como
-alternativa de bajo costo a los sistemas cableados de llamada a enfermería.
+alternativa inalámbrica a los sistemas cableados de llamada a enfermería.
 
 Proyecto integrador de **Electrónica Aplicada III** (Ingeniería Electrónica, UTN Facultad Regional
 Paraná). Presentado en el **6° Congreso Virtual "Los Microcontroladores y sus Aplicaciones"**
 (UTN FRP, 2026) con el trabajo *"GeriVoz: comunicador de voz por RF para residencias geriátricas"*.
 
-> **English summary.** Low-cost wireless nurse-call system for elderly care homes: ESP32 handsets
-> with CC1101 transceivers at 433.92 MHz send two urgency levels (attention / emergency) and
-> half-duplex push-to-talk voice to a base station, which forwards events and decoded audio to a
-> Web Serial dashboard on a PC. Approved in the course evaluation with a link beyond 100 m in line
-> of sight. Audio is captured over I2S at 16 kHz, decimated to 8 kHz with a 31-tap Q15 FIR filter
-> (polyphase interpolator on receive) and compressed with 4-bit IMA ADPCM (32 kbps), so it fits the
-> ~90 kbps usable RF channel and can be streamed while recording. The published version (PCM, no
-> compression) reached 30 m with high packet loss; this repository contains the later ADPCM
-> streaming version. Team project, UTN Paraná, 2026.
+> **English summary.** Wireless nurse-call system for elderly care homes: ESP32 handsets with
+> CC1101 transceivers at 433.92 MHz send two urgency levels (attention / emergency) and half-duplex
+> push-to-talk voice to a base station, which forwards events and decoded audio to a Web Serial
+> dashboard on a PC. Audio is captured over I2S at 16 kHz, decimated to 8 kHz with a 31-tap Q15 FIR
+> filter (polyphase interpolator on receive) and compressed with 4-bit IMA ADPCM (32 kbps), so it
+> fits the ~90 kbps usable RF channel and can be streamed while recording. The version presented at
+> the congress (PCM, no compression) carried voice at 30 m with ~90 % packet loss. This repository
+> contains the later ADPCM streaming version, which passed the course evaluation with an RF link
+> beyond 100 m in line of sight; its voice measurements are bench tests. Team project, UTN Paraná, 2026.
 
 <p align="center">
   <img src="docs/gabinete.jpg" alt="Dos handies GeriVoz en sus gabinetes impresos en 3D" width="320">
@@ -135,10 +135,15 @@ q[N // 2] += 32768 - sum(q)          # suma exacta = 32768
 
 ## Resultados
 
-### Evaluación de la cátedra (14/10/2026)
+Hay dos versiones del sistema: la presentada en el congreso, que transmite la voz en PCM sin
+comprimir, y la de este repositorio, con ADPCM y streaming, que es la que evaluó la cátedra.
 
-Sistema completo (base, handy y página) **aprobado**, con enlace a más de 100 m sin obstáculos. Se
-evaluó la identificación del residente, los dos niveles de urgencia y la llamada de voz.
+### Evaluación de la cátedra (14/10/2026), versión de este repositorio
+
+Sistema completo (base, handy y página) **aprobado**, con enlace de RF a más de 100 m sin
+obstáculos. Se evaluó la identificación del residente, los dos niveles de urgencia y la llamada de
+voz. No se registraron pérdidas de paquetes ni latencia a esa distancia; las mediciones de voz de
+esta versión son las de banco (más abajo).
 
 ### Versión presentada en el congreso (PCM, sin compresión)
 
@@ -221,3 +226,8 @@ la base a 921600 baudios. Los nombres de cada residente se configuran al princip
 El monitor serie acepta comandos de diagnóstico de audio y RF (tono local y por RF, medidor de nivel
 del micrófono, volcado de registros del CC1101, medidor de RSSI, estadísticas de enlace, entre otros);
 la lista completa está en `src/main.cpp`.
+
+## Contacto
+
+**Matias Vicentin**, estudiante de Ingeniería Electrónica, UTN Facultad Regional Paraná.
+[LinkedIn](https://www.linkedin.com/in/matiasvicentin)
